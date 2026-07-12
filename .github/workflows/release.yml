@@ -1,13 +1,15 @@
 name: Release APK
 
+# Fires when a Release is published on GitHub (any tag name/format — created via the
+# web UI, `gh release create`, etc.), or manually from the Actions tab. Builds the APK
+# and attaches it to that release without touching its title/notes.
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Nome da versão (ex.: 1.1.0)'
+        description: 'Nome da versão (ex.: 1.1.0) — cria a release se ela ainda não existir'
         required: true
         default: '1.0.0'
 
@@ -15,7 +17,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-and-attach-apk:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -36,13 +38,15 @@ jobs:
       - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Resolve version
+      - name: Resolve tag and version name
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.version_name }}" >> "$GITHUB_OUTPUT"
             echo "name=${{ github.event.inputs.version_name }}" >> "$GITHUB_OUTPUT"
           else
-            echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+            echo "name=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Rename APK for release
@@ -50,10 +54,8 @@ jobs:
           mkdir -p release
           cp app/build/outputs/apk/debug/app-debug.apk "release/RegaVaranda-${{ steps.version.outputs.name }}.apk"
 
-      - name: Create GitHub Release
+      - name: Attach APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.name }}
-          name: Rega Varanda v${{ steps.version.outputs.name }}
-          generate_release_notes: true
+          tag_name: ${{ steps.version.outputs.tag }}
           files: release/RegaVaranda-${{ steps.version.outputs.name }}.apk
