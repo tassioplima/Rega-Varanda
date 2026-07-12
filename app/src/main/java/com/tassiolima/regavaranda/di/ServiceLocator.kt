@@ -16,6 +16,8 @@ import com.tassiolima.regavaranda.data.repository.ChatRepository
 import com.tassiolima.regavaranda.data.repository.PlantPhotoRepository
 import com.tassiolima.regavaranda.data.repository.PlantRepository
 import com.tassiolima.regavaranda.data.repository.SettingsRepository
+import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
 
 object ServiceLocator {
     @Volatile private var plantRepository: PlantRepository? = null
@@ -25,10 +27,23 @@ object ServiceLocator {
     @Volatile private var apiKeyRepository: ApiKeyRepository? = null
     @Volatile private var locationProvider: LocationProvider? = null
     private val weatherClient by lazy { OpenMeteoClient() }
-    private val claudeVisionClient by lazy { ClaudeVisionClient() }
-    private val geminiVisionClient by lazy { GeminiVisionClient() }
-    private val claudeChatClient by lazy { ClaudeChatClient() }
-    private val geminiChatClient by lazy { GeminiChatClient() }
+
+    /**
+     * Chat/vision calls enviam fotos e pedem respostas longas da IA, o que costuma passar
+     * dos 10s padrão do OkHttp — daí os timeouts maiores para conexão/leitura/escrita.
+     */
+    private val aiHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .callTimeout(120, TimeUnit.SECONDS)
+            .build()
+    }
+    private val claudeVisionClient by lazy { ClaudeVisionClient(aiHttpClient) }
+    private val geminiVisionClient by lazy { GeminiVisionClient(aiHttpClient) }
+    private val claudeChatClient by lazy { ClaudeChatClient(aiHttpClient) }
+    private val geminiChatClient by lazy { GeminiChatClient(aiHttpClient) }
 
     fun plantRepository(context: Context): PlantRepository =
         plantRepository ?: synchronized(this) {
