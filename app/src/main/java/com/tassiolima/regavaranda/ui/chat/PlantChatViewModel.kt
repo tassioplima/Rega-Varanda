@@ -39,6 +39,10 @@ class PlantChatViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isSending = MutableStateFlow(false)
     val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
 
+    companion object {
+        private const val MAX_CHAT_HISTORY_MESSAGES = 24
+    }
+
     fun load(plantId: Long) {
         if (loadedPlantId == plantId) return
         loadedPlantId = plantId
@@ -108,7 +112,11 @@ class PlantChatViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             val provider = apiKeyRepo.getSelectedProvider()
             val apiKey = apiKeyRepo.getKey(provider)
-            val history = chatRepo.getForPlant(plantId).map { ChatTurn(it.role, it.content) }
+            // Só as mensagens mais recentes viram contexto — sem isso, uma conversa antiga
+            // reenviaria o histórico inteiro a cada pergunta, deixando a resposta cada vez mais lenta.
+            val history = chatRepo.getForPlant(plantId)
+                .takeLast(MAX_CHAT_HISTORY_MESSAGES)
+                .map { ChatTurn(it.role, it.content) }
 
             chatRepo.insert(
                 ChatMessageEntity(plantId = plantId, role = ChatRole.USER, content = question, createdAt = System.currentTimeMillis())
