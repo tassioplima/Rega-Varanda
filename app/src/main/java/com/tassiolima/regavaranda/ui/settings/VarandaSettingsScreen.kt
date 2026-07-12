@@ -1,19 +1,23 @@
 package com.tassiolima.regavaranda.ui.settings
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -40,6 +45,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tassiolima.regavaranda.data.model.AiProvider
 import com.tassiolima.regavaranda.data.model.Orientation
 import com.tassiolima.regavaranda.ui.components.OrientationOption
+import com.tassiolima.regavaranda.util.ImageUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,11 +63,28 @@ fun VarandaSettingsScreen(
     var selectedProvider by remember { mutableStateOf(viewModel.getSelectedProvider()) }
     var apiKeyText by remember(selectedProvider) { mutableStateOf(viewModel.getApiKey(selectedProvider) ?: "") }
     var apiKeyVisible by remember { mutableStateOf(false) }
+    val isExporting by viewModel.isExporting.collectAsState()
+    val backupFile by viewModel.backupFile.collectAsState()
+    val exportError by viewModel.exportError.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(pickedOrientationName) {
         pickedOrientationName?.let { name ->
             Orientation.entries.firstOrNull { it.name == name }?.let(viewModel::setOrientation)
             onPickedOrientationConsumed()
+        }
+    }
+
+    LaunchedEffect(backupFile) {
+        backupFile?.let { file ->
+            val uri = ImageUtils.uriForFile(context, file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/zip"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Compartilhar backup"))
+            viewModel.onBackupShared()
         }
     }
 
@@ -180,6 +203,36 @@ fun VarandaSettingsScreen(
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            item {
+                Text("Backup", style = MaterialTheme.typography.titleMedium)
+            }
+            item {
+                Text(
+                    "Exporte suas plantas, fotos, histórico de rega e conversas em um arquivo .zip " +
+                        "para guardar ou transferir para outro aparelho.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            item {
+                OutlinedButton(
+                    onClick = viewModel::exportBackup,
+                    enabled = !isExporting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isExporting) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    } else {
+                        Icon(Icons.Filled.Save, contentDescription = null)
+                    }
+                    Text(" Exportar backup")
+                }
+            }
+            exportError?.let { error ->
+                item {
+                    Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }

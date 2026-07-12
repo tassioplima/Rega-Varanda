@@ -14,6 +14,8 @@ import com.tassiolima.regavaranda.R
 object NotificationHelper {
     private const val CHANNEL_ID = "watering_reminders"
     private const val NOTIFICATION_ID = 1001
+    private const val WEEKLY_CHANNEL_ID = "weekly_summary"
+    private const val WEEKLY_NOTIFICATION_ID = 1002
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -65,5 +67,42 @@ object NotificationHelper {
             .build()
 
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+    }
+
+    fun ensureWeeklyChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                WEEKLY_CHANNEL_ID,
+                "Resumo semanal",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Resumo semanal de regas e saúde das plantas da varanda"
+            }
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(channel)
+        }
+    }
+
+    fun showWeeklySummary(context: Context, title: String, text: String) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
+        ensureWeeklyChannel(context)
+
+        val notification = NotificationCompat.Builder(context, WEEKLY_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(WEEKLY_NOTIFICATION_ID, notification)
     }
 }

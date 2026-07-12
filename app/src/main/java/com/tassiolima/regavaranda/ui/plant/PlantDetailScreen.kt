@@ -171,6 +171,10 @@ fun PlantDetailScreen(
                 }
             }
 
+            if (photos.size >= 2) {
+                item { BeforeAfterCard(oldest = photos.last(), newest = photos.first()) }
+            }
+
             val hasAnalyzedPhoto = photos.any { it.analysisStatus == AnalysisStatus.DONE }
             if (hasAnalyzedPhoto) {
                 item {
@@ -265,6 +269,42 @@ private fun MoistureCard(plant: PlantEntity, onRecordMoisture: (Int) -> Unit) {
                     "acima até o valor que ele mostrar e toque em Registrar.",
                 style = MaterialTheme.typography.bodySmall
             )
+        }
+    }
+}
+
+@Composable
+private fun BeforeAfterCard(oldest: PlantPhotoEntity, newest: PlantPhotoEntity) {
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")) }
+    val daysBetween = ((newest.takenAt - oldest.takenAt) / (24 * 60 * 60 * 1000L)).coerceAtLeast(0)
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("📸 Antes e depois", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (daysBetween > 0) "$daysBetween dia(s) de diferença" else "Mesmo dia",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Antes · ${dateFormat.format(Date(oldest.takenAt))}", style = MaterialTheme.typography.labelSmall)
+                    AsyncImage(
+                        model = oldest.filePath,
+                        contentDescription = "Foto mais antiga",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().height(160.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Depois · ${dateFormat.format(Date(newest.takenAt))}", style = MaterialTheme.typography.labelSmall)
+                    AsyncImage(
+                        model = newest.filePath,
+                        contentDescription = "Foto mais recente",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().height(160.dp)
+                    )
+                }
+            }
         }
     }
 }

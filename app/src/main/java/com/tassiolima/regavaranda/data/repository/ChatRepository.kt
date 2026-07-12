@@ -10,5 +10,7 @@ class ChatRepository(private val dao: ChatMessageDao) {
 
     suspend fun getForPlant(plantId: Long): List<ChatMessageEntity> = dao.getForPlant(plantId)
 
+    suspend fun getAll(): List<ChatMessageEntity> = dao.getAll()
+
     suspend fun insert(message: ChatMessageEntity): Long = dao.insert(message)
 }

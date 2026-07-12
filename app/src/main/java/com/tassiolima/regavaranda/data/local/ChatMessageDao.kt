@@ -13,6 +13,9 @@ interface ChatMessageDao {
     @Query("SELECT * FROM chat_messages WHERE plantId = :plantId ORDER BY createdAt ASC")
     suspend fun getForPlant(plantId: Long): List<ChatMessageEntity>
 
+    @Query("SELECT * FROM chat_messages ORDER BY createdAt ASC")
+    suspend fun getAll(): List<ChatMessageEntity>
+
     @Insert
     suspend fun insert(message: ChatMessageEntity): Long
 }
