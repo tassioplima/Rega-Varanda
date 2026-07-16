@@ -1,2 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<full-backup-content />
+<!-- O secure_settings é criptografado com uma chave do Android Keystore que nunca sai
+     do aparelho: se for restaurado por backup em outra instalação, fica ilegível e
+     derrubava o app (AEADBadTagException). Por isso fica fora do backup. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="secure_settings.xml" />
+</full-backup-content>

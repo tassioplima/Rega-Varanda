@@ -10,16 +10,32 @@ import com.tassiolima.regavaranda.data.model.AiProvider
  * Guarda a chave de cada provedor de IA criptografada no dispositivo (nunca sai do
  * aparelho, exceto nas chamadas diretas às APIs feitas pelo próprio app).
  */
-class ApiKeyRepository(context: Context) {
+class ApiKeyRepository(private val context: Context) {
 
     private val prefs: SharedPreferences by lazy {
+        runCatching { createEncryptedPrefs() }.getOrElse {
+            // Keyset ilegível (ex.: prefs restauradas por backup sem a chave do Keystore,
+            // que nunca sai do aparelho) — sem isso o app crasharia para sempre ao abrir
+            // as Configurações. Descarta o arquivo corrompido e recomeça do zero; o
+            // usuário só precisa digitar a chave de IA novamente.
+            context.deleteSharedPreferences(PREFS_NAME)
+            runCatching {
+                java.security.KeyStore.getInstance("AndroidKeyStore")
+                    .apply { load(null) }
+                    .deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+            }
+            createEncryptedPrefs()
+        }
+    }
+
+    private fun createEncryptedPrefs(): SharedPreferences {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
 
-        EncryptedSharedPreferences.create(
+        return EncryptedSharedPreferences.create(
             context,
-            "secure_settings",
+            PREFS_NAME,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
@@ -47,6 +63,7 @@ class ApiKeyRepository(context: Context) {
     private fun keyFor(provider: AiProvider) = "api_key_${provider.name}"
 
     companion object {
+        private const val PREFS_NAME = "secure_settings"
         private const val KEY_SELECTED_PROVIDER = "selected_ai_provider"
     }
 }
