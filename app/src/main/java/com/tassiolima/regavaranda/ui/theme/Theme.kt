@@ -1,15 +1,11 @@
 package com.tassiolima.regavaranda.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
 // Esquema tonal completo em verde, para que TODOS os componentes (FAB, chips, cards
 // elevados...) sigam a identidade do app em vez de cair nos roxos padrão do Material.
@@ -67,13 +63,8 @@ private val DarkColors = darkColorScheme(
 
 @Composable
 fun RegaVarandaTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val colors = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // Material You: acompanha as cores do papel de parede do usuário no Android 12+.
-        val context = LocalContext.current
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else {
-        if (dark) DarkColors else LightColors
-    }
+    // Esquema verde fixo, sem Material You dynamic color: a identidade visual do app
+    // não deve variar conforme o papel de parede do usuário.
+    val colors = if (isSystemInDarkTheme()) DarkColors else LightColors
     MaterialTheme(colorScheme = colors, content = content)
 }
