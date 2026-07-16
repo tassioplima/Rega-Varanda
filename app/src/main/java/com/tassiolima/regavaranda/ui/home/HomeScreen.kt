@@ -1,21 +1,23 @@
 package com.tassiolima.regavaranda.ui.home
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import android.Manifest
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,10 +36,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,8 +53,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.tassiolima.regavaranda.R
 import com.tassiolima.regavaranda.data.local.PlantEntity
 import com.tassiolima.regavaranda.domain.PlantWithPlan
 import com.tassiolima.regavaranda.domain.WateringScheduler
@@ -62,6 +77,20 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var plantPendingDelete by remember { mutableStateOf<PlantEntity?>(null) }
+
+    val retryLabel = stringResource(R.string.home_retry)
+    LaunchedEffect(state.errorMessage) {
+        state.errorMessage?.let { message ->
+            val result = snackbarHostState.showSnackbar(message = message, actionLabel = retryLabel)
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.refreshLocationAndWeather(forceRefresh = true)
+            } else {
+                viewModel.clearError()
+            }
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -83,23 +112,45 @@ fun HomeScreen(
         permissionLauncher.launch(permissions.toTypedArray())
     }
 
+    plantPendingDelete?.let { plant ->
+        AlertDialog(
+            onDismissRequest = { plantPendingDelete = null },
+            title = { Text(stringResource(R.string.home_delete_dialog_title, plant.name)) },
+            text = { Text(stringResource(R.string.home_delete_dialog_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deletePlant(plant)
+                    plantPendingDelete = null
+                }) {
+                    Text(stringResource(R.string.home_delete_confirm), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { plantPendingDelete = null }) {
+                    Text(stringResource(R.string.home_delete_cancel))
+                }
+            }
+        )
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Rega Varanda") },
+                title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(onClick = onOpenDashboard) {
-                        Icon(Icons.Filled.Favorite, contentDescription = "Saúde das plantas")
+                        Icon(Icons.Filled.Favorite, contentDescription = stringResource(R.string.home_health_dashboard))
                     }
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Configurações da varanda")
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.home_settings))
                     }
                 }
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddPlant) {
-                Icon(Icons.Filled.Add, contentDescription = "Adicionar planta")
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.home_add_plant))
             }
         }
     ) { padding ->
@@ -111,7 +162,13 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) { CircularProgressIndicator() }
 
-                else -> HomeContent(state, viewModel, onOpenPlant)
+                else -> HomeContent(
+                    state = state,
+                    viewModel = viewModel,
+                    onOpenPlant = onOpenPlant,
+                    onAddPlant = onAddPlant,
+                    onRequestDelete = { plantPendingDelete = it }
+                )
             }
         }
     }
@@ -125,20 +182,27 @@ private fun PermissionRequestContent(onRequestPermission: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            "Para calcular o sol que a sua varanda recebe, o Rega Varanda precisa da sua localização.",
-            style = MaterialTheme.typography.bodyLarge
+            stringResource(R.string.home_permission_rationale),
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center
         )
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(16.dp))
-        Button(onClick = onRequestPermission) { Text("Permitir localização") }
+        Spacer(modifier = Modifier.size(16.dp))
+        Button(onClick = onRequestPermission) { Text(stringResource(R.string.home_permission_button)) }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HomeContent(state: HomeUiState, viewModel: HomeViewModel, onOpenPlant: (Long) -> Unit) {
+private fun HomeContent(
+    state: HomeUiState,
+    viewModel: HomeViewModel,
+    onOpenPlant: (Long) -> Unit,
+    onAddPlant: () -> Unit,
+    onRequestDelete: (PlantEntity) -> Unit
+) {
     PullToRefreshBox(
         isRefreshing = state.isLoading,
-        onRefresh = { viewModel.refreshLocationAndWeather() },
+        onRefresh = { viewModel.refreshLocationAndWeather(forceRefresh = true) },
         modifier = Modifier.fillMaxSize()
     ) {
         LazyColumn(
@@ -146,14 +210,6 @@ private fun HomeContent(state: HomeUiState, viewModel: HomeViewModel, onOpenPlan
             contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            state.errorMessage?.let { error ->
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(error, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
             if (state.weather != null && state.sunExposure != null) {
                 item { WeatherCard(state) }
             }
@@ -163,24 +219,45 @@ private fun HomeContent(state: HomeUiState, viewModel: HomeViewModel, onOpenPlan
             }
 
             if (state.plantsWithPlans.isEmpty()) {
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "Você ainda não adicionou nenhuma planta. Toque no + para começar.",
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
+                item { EmptyGardenCard(onAddPlant) }
             }
 
-            items(state.plantsWithPlans) { pwp ->
+            items(state.plantsWithPlans, key = { it.plant.id }) { pwp ->
                 PlantCard(
                     pwp = pwp,
                     onWater = { viewModel.markWatered(pwp.plant) },
                     onUndoWater = { viewModel.undoWatering(pwp.plant) },
-                    onDelete = { viewModel.deletePlant(pwp.plant) },
+                    onDelete = { onRequestDelete(pwp.plant) },
                     onOpenDetail = { onOpenPlant(pwp.plant.id) }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyGardenCard(onAddPlant: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("🪴", style = MaterialTheme.typography.displayLarge)
+            Text(
+                stringResource(R.string.home_empty_title),
+                style = MaterialTheme.typography.titleLarge,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                stringResource(R.string.home_empty_body),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(onClick = onAddPlant) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Text(" " + stringResource(R.string.home_empty_cta))
             }
         }
     }
@@ -192,7 +269,7 @@ private fun WeatherCard(state: HomeUiState) {
     val sun = state.sunExposure!!
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Clima e sol na varanda", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.home_weather_title), style = MaterialTheme.typography.titleMedium)
             Text("🌡️ Máxima de ${weather.maxTempC.roundToInt()}°C / mínima de ${weather.minTempC.roundToInt()}°C")
             Text("☀️ Sol direto estimado hoje: ~${sun.estimatedSunHours.roundToInt()}h")
             Text("🧭 Fachada configurada: ${state.orientation?.label ?: "não configurada"}")
@@ -208,9 +285,46 @@ private fun WeatherCard(state: HomeUiState) {
 private fun TipsCard(tips: List<String>) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Dicas de hoje", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.home_tips_title), style = MaterialTheme.typography.titleMedium)
             tips.forEach { tip -> Text(tip, style = MaterialTheme.typography.bodyMedium) }
         }
+    }
+}
+
+@Composable
+private fun WateringStatusBadge(pwp: PlantWithPlan) {
+    val (label, container, content) = when {
+        pwp.status.isDueNow && pwp.plan.timesPerDay >= 2 -> Triple(
+            "🚨 Regar agora (${pwp.status.timesRemainingToday}x hoje)",
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer
+        )
+        pwp.status.isDueNow -> Triple(
+            stringResource(R.string.home_status_water_now),
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer
+        )
+        pwp.status.nextDueAtMillis != null -> {
+            val remaining = pwp.status.nextDueAtMillis!! - System.currentTimeMillis()
+            Triple(
+                "⏳ Rega em ${WateringScheduler.formatCountdown(remaining)}",
+                MaterialTheme.colorScheme.secondaryContainer,
+                MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+        else -> Triple(
+            stringResource(R.string.home_status_watered_today),
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+
+    Surface(color = container, contentColor = content, shape = RoundedCornerShape(8.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
     }
 }
 
@@ -224,44 +338,64 @@ private fun PlantCard(
 ) {
     val plant: PlantEntity = pwp.plant
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDetail)) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    "${plant.category.emoji} ${plant.name}",
-                    style = MaterialTheme.typography.titleMedium
-                )
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (pwp.latestPhotoPath != null) {
+                    AsyncImage(
+                        model = pwp.latestPhotoPath,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp))
+                    )
+                } else {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(plant.category.emoji, style = MaterialTheme.typography.headlineMedium)
+                        }
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(plant.name, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        plant.identifiedSpecies?.takeIf { it.isNotBlank() } ?: plant.category.label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    WateringStatusBadge(pwp)
+                }
+
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Remover planta")
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = stringResource(R.string.home_delete_plant),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
-            Text(plant.category.label, style = MaterialTheme.typography.bodySmall)
-            plant.identifiedSpecies?.takeIf { it.isNotBlank() }?.let { species ->
-                Text("🔬 Identificado pela IA: $species", style = MaterialTheme.typography.bodySmall)
-            }
+
+            Text(
+                pwp.plan.reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             if (pwp.sunExposure.isPlantSpecificLocation) {
                 Text(
                     "📍 Local próprio: ${pwp.sunExposure.orientation?.label ?: "sol manual"} " +
                         "(~${pwp.sunExposure.estimatedSunHours.roundToInt()}h de sol)",
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Text(pwp.plan.reason, style = MaterialTheme.typography.bodySmall)
-
-            val statusText = when {
-                pwp.status.isDueNow && pwp.plan.timesPerDay >= 2 ->
-                    "🚨 Regar agora (${pwp.status.timesRemainingToday}x restante(s) hoje)"
-                pwp.status.isDueNow -> "💧 Regar agora"
-                pwp.status.nextDueAtMillis != null -> {
-                    val remaining = pwp.status.nextDueAtMillis - System.currentTimeMillis()
-                    "⏳ Próxima rega em ${WateringScheduler.formatCountdown(remaining)}"
-                }
-                else -> "✅ Regada hoje"
-            }
-            Text(
-                statusText,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (pwp.status.isDueNow) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-            )
 
             pwp.overwateringWarning?.let { warning ->
                 Text(warning, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -283,16 +417,15 @@ private fun PlantCard(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onWater) {
                     Icon(Icons.Filled.WaterDrop, contentDescription = null)
-                    Text(" Reguei agora")
+                    Text(stringResource(R.string.home_watered_now))
                 }
                 if (canUndo) {
                     OutlinedButton(onClick = onUndoWater) {
                         Icon(Icons.Filled.Undo, contentDescription = null)
-                        Text(" Desfazer")
+                        Text(stringResource(R.string.home_undo))
                     }
                 }
             }
-
         }
     }
 }

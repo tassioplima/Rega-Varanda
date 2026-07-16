@@ -1,12 +1,14 @@
 package com.tassiolima.regavaranda.ui.settings
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tassiolima.regavaranda.data.model.AiProvider
 import com.tassiolima.regavaranda.data.model.Orientation
 import com.tassiolima.regavaranda.di.ServiceLocator
 import com.tassiolima.regavaranda.util.BackupManager
+import com.tassiolima.regavaranda.util.ImportSummary
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,6 +49,32 @@ class VarandaSettingsViewModel(application: Application) : AndroidViewModel(appl
         _backupFile.value = null
     }
 
+    private val _isImporting = MutableStateFlow(false)
+    val isImporting: StateFlow<Boolean> = _isImporting.asStateFlow()
+
+    private val _importResult = MutableStateFlow<ImportSummary?>(null)
+    val importResult: StateFlow<ImportSummary?> = _importResult.asStateFlow()
+
+    private val _importError = MutableStateFlow<String?>(null)
+    val importError: StateFlow<String?> = _importError.asStateFlow()
+
+    fun importBackup(uri: Uri) {
+        viewModelScope.launch {
+            _isImporting.value = true
+            _importError.value = null
+            _importResult.value = null
+            runCatching { BackupManager.importBackup(getApplication(), uri) }
+                .onSuccess { _importResult.value = it }
+                .onFailure { _importError.value = it.message ?: "Falha ao importar backup" }
+            _isImporting.value = false
+        }
+    }
+
+    fun onImportResultShown() {
+        _importResult.value = null
+        _importError.value = null
+    }
+
     fun setOrientation(orientation: Orientation) {
         viewModelScope.launch { settingsRepo.setOrientation(orientation) }
     }
@@ -64,6 +92,10 @@ class VarandaSettingsViewModel(application: Application) : AndroidViewModel(appl
     fun getApiKey(provider: AiProvider): String? = apiKeyRepo.getKey(provider)
 
     fun setApiKey(provider: AiProvider, value: String) {
-        apiKeyRepo.setKey(provider, value)
+        // EncryptedSharedPreferences criptografa de forma síncrona — fora da main thread
+        // para não travar a digitação (este método roda a cada tecla).
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            apiKeyRepo.setKey(provider, value)
+        }
     }
 }

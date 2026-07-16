@@ -1,6 +1,8 @@
 package com.tassiolima.regavaranda.ui.settings
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,8 +13,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -66,7 +69,14 @@ fun VarandaSettingsScreen(
     val isExporting by viewModel.isExporting.collectAsState()
     val backupFile by viewModel.backupFile.collectAsState()
     val exportError by viewModel.exportError.collectAsState()
+    val isImporting by viewModel.isImporting.collectAsState()
+    val importResult by viewModel.importResult.collectAsState()
+    val importError by viewModel.importError.collectAsState()
     val context = LocalContext.current
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { viewModel.importBackup(it) }
+    }
 
     LaunchedEffect(pickedOrientationName) {
         pickedOrientationName?.let { name ->
@@ -94,7 +104,7 @@ fun VarandaSettingsScreen(
                 title = { Text("Configuração da varanda") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                 }
             )
@@ -230,6 +240,44 @@ fun VarandaSettingsScreen(
                 }
             }
             exportError?.let { error ->
+                item {
+                    Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
+
+            item {
+                Text(
+                    "Importar um backup adiciona as plantas do arquivo às que você já tem " +
+                        "(não substitui nem apaga nada existente).",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            item {
+                OutlinedButton(
+                    onClick = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
+                    enabled = !isImporting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isImporting) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    } else {
+                        Icon(Icons.Filled.FileUpload, contentDescription = null)
+                    }
+                    Text(" Importar backup")
+                }
+            }
+            importResult?.let { result ->
+                item {
+                    Text(
+                        "✅ Importado: ${result.plantsImported} planta(s), ${result.photosImported} foto(s), " +
+                            "${result.chatMessagesImported} mensagem(ns) de chat, ${result.wateringLogImported} " +
+                            "registro(s) de rega.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            importError?.let { error ->
                 item {
                     Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }

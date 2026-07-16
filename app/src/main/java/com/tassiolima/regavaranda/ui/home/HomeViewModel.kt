@@ -4,24 +4,30 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tassiolima.regavaranda.data.local.PlantEntity
+import com.tassiolima.regavaranda.data.local.PlantPhotoEntity
 import com.tassiolima.regavaranda.data.local.WateringLogEntity
 import com.tassiolima.regavaranda.data.model.Orientation
 import com.tassiolima.regavaranda.data.remote.WeatherSnapshot
 import com.tassiolima.regavaranda.data.repository.VarandaSettings
 import com.tassiolima.regavaranda.di.ServiceLocator
 import com.tassiolima.regavaranda.domain.PlantCareAdvisor
+import com.tassiolima.regavaranda.domain.PlantPlanner
 import com.tassiolima.regavaranda.domain.PlantWithPlan
 import com.tassiolima.regavaranda.domain.SunExposure
 import com.tassiolima.regavaranda.domain.SunExposureCalculator
-import com.tassiolima.regavaranda.domain.WateringScheduler
 import com.tassiolima.regavaranda.util.DateUtils
+import com.tassiolima.regavaranda.util.ImageUtils
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class HomeUiState(
     val isLoading: Boolean = true,
@@ -45,13 +51,22 @@ private data class CoreState(
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val plantRepo = ServiceLocator.plantRepository(application)
+    private val photoRepo = ServiceLocator.plantPhotoRepository(application)
     private val settingsRepo = ServiceLocator.settingsRepository(application)
     private val locationProvider = ServiceLocator.locationProvider(application)
-    private val weatherClient = ServiceLocator.weatherClient()
+    private val weatherRepo = ServiceLocator.weatherRepository(application)
 
     private val weatherFlow = MutableStateFlow<WeatherSnapshot?>(null)
     private val loadingFlow = MutableStateFlow(true)
     private val errorFlow = MutableStateFlow<String?>(null)
+
+    /** Re-emite a cada minuto para o countdown de "próxima rega" andar sozinho na tela. */
+    private val minuteTicker = flow {
+        while (true) {
+            emit(Unit)
+            delay(60_000)
+        }
+    }
 
     private val coreState = combine(
         settingsRepo.settingsFlow,
@@ -65,16 +80,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     val uiState: StateFlow<HomeUiState> = combine(
         coreState,
-        plantRepo.observeWateringLog()
-    ) { core, wateringLog ->
-        buildUiState(core, wateringLog)
+        plantRepo.observeWateringLog(),
+        photoRepo.observeAll(),
+        minuteTicker
+    ) { core, wateringLog, photos, _ ->
+        buildUiState(core, wateringLog, photos)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     init {
         refreshLocationAndWeather()
     }
 
-    private fun buildUiState(core: CoreState, wateringLog: List<WateringLogEntity>): HomeUiState {
+    private fun buildUiState(
+        core: CoreState,
+        wateringLog: List<WateringLogEntity>,
+        photos: List<PlantPhotoEntity>
+    ): HomeUiState {
         val (settings, plants, weather, loading, error) = core
         val hasPermission = locationProvider.hasLocationPermission()
         if (weather == null) {
@@ -88,23 +109,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         val sunExposure = SunExposureCalculator.estimate(weather, settings.orientation, settings.manualSunHoursOverride)
         val now = System.currentTimeMillis()
-        val logsByPlant = wateringLog.groupBy { it.plantId }
-        val plansWithStatus = plants.map { plant ->
-            val plantSunExposure = SunExposureCalculator.estimateForPlant(weather, settings, plant)
-            val plan = WateringScheduler.computePlan(
-                plant,
-                weather,
-                plantSunExposure.estimatedSunHours
-            )
-            val status = WateringScheduler.computeStatus(plan, plant, now)
-            val overwateringWarning = WateringScheduler.detectOverwatering(
-                plan,
-                logsByPlant[plant.id].orEmpty(),
-                now
-            )
-            val moistureFeedback = WateringScheduler.moistureFeedback(plant, now)
-            PlantWithPlan(plant, plan, status, plantSunExposure, overwateringWarning, moistureFeedback)
-        }
+        val latestPhotoByPlant = photos
+            .groupBy { it.plantId }
+            .mapValues { (_, plantPhotos) -> plantPhotos.maxBy { it.takenAt }.filePath }
+
+        val plansWithStatus = PlantPlanner.buildPlans(
+            plants = plants,
+            weather = weather,
+            settings = settings,
+            wateringLog = wateringLog,
+            nowMillis = now,
+            latestPhotoPathByPlant = latestPhotoByPlant
+        )
         val tips = PlantCareAdvisor.dailyTips(weather, sunExposure, plansWithStatus, now)
 
         return HomeUiState(
@@ -119,7 +135,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun refreshLocationAndWeather() {
+    fun refreshLocationAndWeather(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             loadingFlow.value = true
             errorFlow.value = null
@@ -131,7 +147,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 settingsRepo.setLastLocation(location.latitude, location.longitude)
-                weatherFlow.value = weatherClient.fetchToday(location.latitude, location.longitude)
+                weatherFlow.value = weatherRepo.getToday(location.latitude, location.longitude, forceRefresh)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 errorFlow.value = "Erro ao buscar o clima: ${e.message}"
             } finally {
@@ -143,6 +161,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 loadingFlow.value = false
             }
         }
+    }
+
+    fun clearError() {
+        errorFlow.value = null
     }
 
     fun markWatered(plant: PlantEntity) {
@@ -170,6 +192,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deletePlant(plant: PlantEntity) {
-        viewModelScope.launch { plantRepo.deletePlant(plant) }
+        viewModelScope.launch {
+            // As linhas de fotos/chat/rega caem via FK CASCADE; os arquivos JPEG no disco
+            // precisam ser removidos manualmente para não vazar armazenamento.
+            withContext(Dispatchers.IO) {
+                runCatching { ImageUtils.photosDir(getApplication(), plant.id).deleteRecursively() }
+            }
+            plantRepo.deletePlant(plant)
+        }
     }
 }

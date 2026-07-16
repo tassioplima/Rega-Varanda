@@ -11,6 +11,7 @@ import com.tassiolima.regavaranda.data.local.PlantPhotoEntity
 import com.tassiolima.regavaranda.data.model.HealthState
 import com.tassiolima.regavaranda.di.ServiceLocator
 import com.tassiolima.regavaranda.util.ImageUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,8 +42,10 @@ class PlantDetailViewModel(application: Application) : AndroidViewModel(applicat
     fun load(plantId: Long) {
         if (loadedPlantId == plantId) return
         loadedPlantId = plantId
+        // Observa o banco em vez de ler uma vez: assim edições feitas em outra tela
+        // (nome, orientação) aparecem aqui imediatamente ao voltar.
         viewModelScope.launch {
-            _plant.value = plantRepo.getPlant(plantId)
+            plantRepo.observePlant(plantId).collectLatest { _plant.value = it }
         }
         viewModelScope.launch {
             photoRepo.observeForPlant(plantId).collectLatest { _photos.value = it }
@@ -126,8 +129,9 @@ class PlantDetailViewModel(application: Application) : AndroidViewModel(applicat
                             aiWateringIntervalDays = result.recommendedWateringIntervalDays ?: latestPlant.aiWateringIntervalDays
                         )
                     )
-                    _plant.value = plantRepo.getPlant(plant.id)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 photoRepo.update(photo.copy(analysisStatus = AnalysisStatus.FAILED, diagnosis = e.message))
             }
@@ -166,7 +170,6 @@ class PlantDetailViewModel(application: Application) : AndroidViewModel(applicat
         val current = _plant.value ?: return
         viewModelScope.launch {
             plantRepo.recordMoistureReading(current, level, System.currentTimeMillis())
-            _plant.value = plantRepo.getPlant(current.id)
         }
     }
 }

@@ -1,10 +1,16 @@
 package com.tassiolima.regavaranda.util
 
 import android.content.Context
+import android.net.Uri
+import com.tassiolima.regavaranda.data.local.AnalysisStatus
 import com.tassiolima.regavaranda.data.local.ChatMessageEntity
 import com.tassiolima.regavaranda.data.local.PlantEntity
 import com.tassiolima.regavaranda.data.local.PlantPhotoEntity
 import com.tassiolima.regavaranda.data.local.WateringLogEntity
+import com.tassiolima.regavaranda.data.model.ChatRole
+import com.tassiolima.regavaranda.data.model.HealthState
+import com.tassiolima.regavaranda.data.model.Orientation
+import com.tassiolima.regavaranda.data.model.PlantCategory
 import com.tassiolima.regavaranda.di.ServiceLocator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -16,9 +22,17 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
-/** Exporta plantas, fotos, histórico de rega e chats para um único arquivo .zip compartilhável. */
+data class ImportSummary(
+    val plantsImported: Int,
+    val photosImported: Int,
+    val chatMessagesImported: Int,
+    val wateringLogImported: Int
+)
+
+/** Exporta/importa plantas, fotos, histórico de rega e chats via um único arquivo .zip. */
 object BackupManager {
 
     suspend fun exportBackup(context: Context): File = withContext(Dispatchers.IO) {
@@ -59,6 +73,129 @@ object BackupManager {
         }
         zipFile
     }
+
+    /**
+     * Importa um backup .zip como um NOVO conjunto de plantas — soma às plantas já existentes
+     * em vez de substituí-las, então IDs antigos do arquivo são remapeados para novos IDs ao
+     * inserir. Rodar a importação do mesmo backup mais de uma vez duplica as plantas.
+     */
+    suspend fun importBackup(context: Context, zipUri: Uri): ImportSummary = withContext(Dispatchers.IO) {
+        val plantRepo = ServiceLocator.plantRepository(context)
+        val photoRepo = ServiceLocator.plantPhotoRepository(context)
+        val chatRepo = ServiceLocator.chatRepository(context)
+
+        val tempZip = File.createTempFile("import_", ".zip", context.cacheDir)
+        try {
+            context.contentResolver.openInputStream(zipUri)?.use { input ->
+                tempZip.outputStream().use { output -> input.copyTo(output) }
+            } ?: throw java.io.IOException("Não foi possível ler o arquivo selecionado")
+
+            ZipFile(tempZip).use { zip ->
+                val jsonEntry = zip.getEntry("backup.json")
+                    ?: throw java.io.IOException("Arquivo não parece ser um backup do Rega Varanda")
+                val json = JSONObject(zip.getInputStream(jsonEntry).bufferedReader().readText())
+
+                val oldToNewPlantId = mutableMapOf<Long, Long>()
+                val plantsJson = json.getJSONArray("plants")
+                for (i in 0 until plantsJson.length()) {
+                    val p = plantsJson.getJSONObject(i)
+                    val newId = plantRepo.insertPlant(p.toPlantEntity())
+                    oldToNewPlantId[p.getLong("id")] = newId
+                }
+
+                val photosJson = json.optJSONArray("photos") ?: JSONArray()
+                var photosImported = 0
+                for (i in 0 until photosJson.length()) {
+                    val ph = photosJson.getJSONObject(i)
+                    val newPlantId = oldToNewPlantId[ph.getLong("plantId")] ?: continue
+                    val relativePath = ph.getString("relativePath")
+                    val fileName = File(relativePath).name
+                    val destFile = File(ImageUtils.photosDir(context, newPlantId), fileName)
+
+                    zip.getEntry("photos/$relativePath")?.let { entry ->
+                        zip.getInputStream(entry).use { input -> destFile.outputStream().use { input.copyTo(it) } }
+                    }
+
+                    photoRepo.insert(ph.toPlantPhotoEntity(newPlantId, destFile.absolutePath))
+                    photosImported++
+                }
+
+                val chatJson = json.optJSONArray("chatMessages") ?: JSONArray()
+                var chatImported = 0
+                for (i in 0 until chatJson.length()) {
+                    val c = chatJson.getJSONObject(i)
+                    val newPlantId = oldToNewPlantId[c.getLong("plantId")] ?: continue
+                    chatRepo.insert(
+                        ChatMessageEntity(
+                            plantId = newPlantId,
+                            role = ChatRole.valueOf(c.getString("role")),
+                            content = c.getString("content"),
+                            createdAt = c.getLong("createdAt")
+                        )
+                    )
+                    chatImported++
+                }
+
+                val logJson = json.optJSONArray("wateringLog") ?: JSONArray()
+                var logImported = 0
+                for (i in 0 until logJson.length()) {
+                    val w = logJson.getJSONObject(i)
+                    val newPlantId = oldToNewPlantId[w.getLong("plantId")] ?: continue
+                    plantRepo.insertWateringLogEntry(newPlantId, w.getLong("wateredAt"))
+                    logImported++
+                }
+
+                ImportSummary(
+                    plantsImported = oldToNewPlantId.size,
+                    photosImported = photosImported,
+                    chatMessagesImported = chatImported,
+                    wateringLogImported = logImported
+                )
+            }
+        } finally {
+            tempZip.delete()
+        }
+    }
+
+    private fun JSONObject.longOrNull(key: String): Long? = if (isNull(key)) null else optLong(key)
+    private fun JSONObject.intOrNull(key: String): Int? = if (isNull(key)) null else optInt(key)
+    private fun JSONObject.stringOrNull(key: String): String? = if (isNull(key)) null else optString(key)
+    private fun JSONObject.floatOrNull(key: String): Float? = if (isNull(key)) null else optDouble(key).toFloat()
+
+    private fun JSONObject.toPlantEntity() = PlantEntity(
+        name = getString("name"),
+        category = PlantCategory.valueOf(getString("category")),
+        customIntervalDays = intOrNull("customIntervalDays"),
+        notes = optString("notes", ""),
+        createdAt = getLong("createdAt"),
+        lastWateredAt = longOrNull("lastWateredAt"),
+        waterCountToday = optInt("waterCountToday", 0),
+        waterCountDayEpoch = optLong("waterCountDayEpoch", 0),
+        lastFertilizedAt = longOrNull("lastFertilizedAt"),
+        orientationOverride = stringOrNull("orientationOverride")?.let { Orientation.valueOf(it) },
+        sunHoursOverride = floatOrNull("sunHoursOverride"),
+        identifiedSpecies = stringOrNull("identifiedSpecies"),
+        aiWateringIntervalDays = intOrNull("aiWateringIntervalDays"),
+        soilMoistureLevel = intOrNull("soilMoistureLevel"),
+        soilMoistureReadingAt = longOrNull("soilMoistureReadingAt")
+    )
+
+    private fun JSONObject.toPlantPhotoEntity(newPlantId: Long, filePath: String) = PlantPhotoEntity(
+        plantId = newPlantId,
+        filePath = filePath,
+        takenAt = getLong("takenAt"),
+        analysisStatus = runCatching { AnalysisStatus.valueOf(getString("analysisStatus")) }.getOrDefault(AnalysisStatus.DONE),
+        aiSuggestedHealth = stringOrNull("aiSuggestedHealth")?.let { HealthState.valueOf(it) },
+        confirmedHealth = stringOrNull("confirmedHealth")?.let { HealthState.valueOf(it) },
+        diagnosis = stringOrNull("diagnosis"),
+        wateringTip = stringOrNull("wateringTip"),
+        pruningTip = stringOrNull("pruningTip"),
+        fertilizingTip = stringOrNull("fertilizingTip"),
+        repottingTip = stringOrNull("repottingTip"),
+        identifiedSpecies = stringOrNull("identifiedSpecies"),
+        recommendedWateringIntervalDays = intOrNull("recommendedWateringIntervalDays"),
+        evolutionNote = stringOrNull("evolutionNote")
+    )
 
     private fun photoEntryName(context: Context, photo: PlantPhotoEntity): String {
         val root = File(context.filesDir, "plant_photos")

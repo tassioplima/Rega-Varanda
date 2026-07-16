@@ -1,12 +1,25 @@
 package com.tassiolima.regavaranda.data.local
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.tassiolima.regavaranda.data.model.HealthState
 
 enum class AnalysisStatus { PENDING, ANALYZING, DONE, FAILED, NO_API_KEY }
 
-@Entity(tableName = "plant_photos")
+@Entity(
+    tableName = "plant_photos",
+    foreignKeys = [
+        ForeignKey(
+            entity = PlantEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["plantId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("plantId")]
+)
 data class PlantPhotoEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val plantId: Long,

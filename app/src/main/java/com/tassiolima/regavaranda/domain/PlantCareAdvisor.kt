@@ -11,7 +11,9 @@ data class PlantWithPlan(
     val status: WateringStatus,
     val sunExposure: SunExposure,
     val overwateringWarning: String? = null,
-    val moistureFeedback: MoistureFeedback? = null
+    val moistureFeedback: MoistureFeedback? = null,
+    /** Caminho da foto mais recente da planta, para thumbnail na Home (null se não houver). */
+    val latestPhotoPath: String? = null
 )
 
 object PlantCareAdvisor {

@@ -16,6 +16,7 @@ import com.tassiolima.regavaranda.data.repository.ChatRepository
 import com.tassiolima.regavaranda.data.repository.PlantPhotoRepository
 import com.tassiolima.regavaranda.data.repository.PlantRepository
 import com.tassiolima.regavaranda.data.repository.SettingsRepository
+import com.tassiolima.regavaranda.data.repository.WeatherRepository
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 
@@ -26,6 +27,7 @@ object ServiceLocator {
     @Volatile private var settingsRepository: SettingsRepository? = null
     @Volatile private var apiKeyRepository: ApiKeyRepository? = null
     @Volatile private var locationProvider: LocationProvider? = null
+    @Volatile private var weatherRepository: WeatherRepository? = null
     private val weatherClient by lazy { OpenMeteoClient() }
 
     /**
@@ -84,6 +86,12 @@ object ServiceLocator {
         }
 
     fun weatherClient(): OpenMeteoClient = weatherClient
+
+    fun weatherRepository(context: Context): WeatherRepository =
+        weatherRepository ?: synchronized(this) {
+            weatherRepository ?: WeatherRepository(context.applicationContext, weatherClient)
+                .also { weatherRepository = it }
+        }
 
     fun claudeVisionClient(): ClaudeVisionClient = claudeVisionClient
 

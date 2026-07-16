@@ -141,6 +141,8 @@ class PlantChatViewModel(application: Application) : AndroidViewModel(applicatio
                 chatRepo.insert(
                     ChatMessageEntity(plantId = plantId, role = ChatRole.ASSISTANT, content = reply, createdAt = System.currentTimeMillis())
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 chatRepo.insert(
                     ChatMessageEntity(

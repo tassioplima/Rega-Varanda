@@ -1,4 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Rega Varanda</string>
+
+    <!-- Home -->
+    <string name="home_health_dashboard">Saúde das plantas</string>
+    <string name="home_settings">Configurações da varanda</string>
+    <string name="home_add_plant">Adicionar planta</string>
+    <string name="home_permission_rationale">Para calcular o sol que a sua varanda recebe, o Rega Varanda precisa da sua localização.</string>
+    <string name="home_permission_button">Permitir localização</string>
+    <string name="home_weather_title">Clima e sol na varanda</string>
+    <string name="home_tips_title">Dicas de hoje</string>
+    <string name="home_empty_title">Sua varanda ainda está vazia</string>
+    <string name="home_empty_body">Adicione sua primeira planta para receber lembretes de rega e dicas de cuidado feitas sob medida para o sol da sua varanda.</string>
+    <string name="home_empty_cta">Adicionar primeira planta</string>
+    <string name="home_retry">Tentar novamente</string>
+    <string name="home_delete_plant">Remover planta</string>
+    <string name="home_delete_dialog_title">Remover %1$s?</string>
+    <string name="home_delete_dialog_body">Todas as fotos, o histórico de regas e as conversas desta planta serão apagados. Essa ação não pode ser desfeita.</string>
+    <string name="home_delete_confirm">Remover</string>
+    <string name="home_delete_cancel">Cancelar</string>
+    <string name="home_watered_now"> Reguei agora</string>
+    <string name="home_undo"> Desfazer</string>
+    <string name="home_status_water_now">💧 Regar agora</string>
+    <string name="home_status_watered_today">✅ Regada hoje</string>
 </resources>

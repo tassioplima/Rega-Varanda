@@ -16,15 +16,24 @@ class PlantRepository(
 
     suspend fun getPlant(id: Long): PlantEntity? = dao.getById(id)
 
+    fun observePlant(id: Long): Flow<PlantEntity?> = dao.observeById(id)
+
     suspend fun savePlant(plant: PlantEntity) {
         if (plant.id == 0L) dao.insert(plant) else dao.update(plant)
     }
+
+    /** Insere sempre como planta nova (usado ao importar um backup) e devolve o novo id gerado. */
+    suspend fun insertPlant(plant: PlantEntity): Long = dao.insert(plant)
 
     suspend fun deletePlant(plant: PlantEntity) = dao.delete(plant)
 
     fun observeWateringLog(): Flow<List<WateringLogEntity>> = wateringLogDao.observeAll()
 
     suspend fun getWateringLog(plantId: Long): List<WateringLogEntity> = wateringLogDao.getForPlant(plantId)
+
+    /** Insere uma entrada de histórico de rega isolada (usado ao importar um backup). */
+    suspend fun insertWateringLogEntry(plantId: Long, wateredAt: Long) =
+        wateringLogDao.insert(WateringLogEntity(plantId = plantId, wateredAt = wateredAt))
 
     suspend fun markWatered(plant: PlantEntity, nowMillis: Long, todayEpochDay: Long) {
         val isSameDay = plant.waterCountDayEpoch == todayEpochDay

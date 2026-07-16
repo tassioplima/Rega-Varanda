@@ -56,6 +56,8 @@ class WeeklySummaryWorker(
 
             NotificationHelper.showWeeklySummary(applicationContext, title, text)
             Result.success()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.retry()
         }
