@@ -61,6 +61,15 @@ enum class PlantCategory(
         careTip = "Prefere luz indireta e ambiente úmido. Borrife água nas folhas em dias muito secos.",
         dryMoistureThreshold = 5
     ),
+    ORQUIDEA(
+        label = "Orquídea",
+        emoji = "🌸",
+        baseWateringDays = 7,
+        fertilizingDays = 30,
+        sunNeed = SunNeed.MEIA_SOMBRA,
+        careTip = "Regue por imersão do vaso em água à temperatura ambiente por alguns minutos (ou com o método do cubo de gelo), evitando molhar a coroa. Prefira substrato de casca/fibra em vez de terra comum, com luz indireta forte.",
+        dryMoistureThreshold = 3
+    ),
     OUTRA(
         label = "Outra planta",
         emoji = "🌱",

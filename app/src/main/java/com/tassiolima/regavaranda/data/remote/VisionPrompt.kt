@@ -21,6 +21,8 @@ object VisionPrompt {
             "Esta é a primeira foto registrada desta planta, então não há histórico para comparar."
         }
 
+        val categoryOptions = PlantCategory.entries.joinToString(", ") { "\"${it.name}\" (${it.label})" }
+
         return """
             Você é um especialista em botânica e jardinagem de varanda/apartamento.
             Analise esta foto de uma planta que o dono chama de "$plantName" (categoria informada pelo
@@ -34,13 +36,14 @@ object VisionPrompt {
             exatamente neste formato:
             {
               "identified_species": "nome popular (e científico entre parênteses se souber) da espécie identificada na foto, ex: 'Suculenta Echeveria (Echeveria elegans)'",
+              "suggested_category": uma destas opções, a que melhor combina com o que você vê na foto: $categoryOptions,
               "recommended_watering_interval_days": número inteiro de dias entre regas ideal para ESSA espécie específica em condições normais (ex: 1, 3, 7, 15, 30 — use o valor típico e conhecido para a espécie identificada, não um chute genérico),
               "health_state": "SAUDAVEL" ou "ATENCAO" ou "CRITICA",
               "diagnosis": "resumo curto (1-2 frases) do que você observa na foto",
               "evolution_note": "comparação com o histórico anterior (ex: 'Melhorando: as folhas amareladas da última foto já não aparecem.'), ou string vazia se não houver histórico",
               "watering_tip": "dica objetiva sobre rega para esta espécie, ou 'A rega parece adequada.' se estiver tudo bem",
               "pruning_tip": "dica objetiva sobre poda, ou 'Não é necessário podar agora.' se não precisar",
-              "fertilizing_tip": "dica objetiva sobre adubação/vitaminas, ou 'Não é necessário adubar agora.' se não precisar",
+              "fertilizing_tip": "dica objetiva sobre adubação, indicando o TIPO DE PRODUTO mais adequado para esta espécie específica (ex.: 'Adubo líquido NPK balanceado diluído na água de rega, a cada 15 dias' ou 'Adubo de liberação lenta em grânulos (tipo Osmocote), a cada 3 meses' ou 'Adubo foliar rico em fósforo para estimular floração' ou 'Adubo específico para orquídeas, diluído pela metade da dose'), ou 'Não é necessário adubar agora.' se não precisar",
               "repotting_tip": "dica objetiva sobre troca de vaso/transplante, ou 'O vaso atual parece adequado.' se não precisar"
             }
         """.trimIndent()
@@ -60,6 +63,8 @@ object VisionPrompt {
             result.optInt("recommended_watering_interval_days", -1).takeIf { it > 0 }
         } else null
 
+        val suggestedCategory = PlantCategory.entries.firstOrNull { it.name == result.optString("suggested_category") }
+
         return PhotoAnalysisResult(
             healthState = healthState,
             diagnosis = result.optString("diagnosis", ""),
@@ -69,7 +74,8 @@ object VisionPrompt {
             repottingTip = result.optString("repotting_tip", ""),
             identifiedSpecies = result.optString("identified_species", ""),
             recommendedWateringIntervalDays = intervalDays,
-            evolutionNote = result.optString("evolution_note", "")
+            evolutionNote = result.optString("evolution_note", ""),
+            suggestedCategory = suggestedCategory
         )
     }
 }

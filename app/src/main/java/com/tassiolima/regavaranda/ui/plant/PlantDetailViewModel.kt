@@ -121,12 +121,18 @@ class PlantDetailViewModel(application: Application) : AndroidViewModel(applicat
                     )
                 )
 
-                if (result.identifiedSpecies.isNotBlank() || result.recommendedWateringIntervalDays != null) {
+                if (result.identifiedSpecies.isNotBlank() ||
+                    result.recommendedWateringIntervalDays != null ||
+                    result.suggestedCategory != null
+                ) {
                     val latestPlant = plantRepo.getPlant(plant.id) ?: plant
                     plantRepo.savePlant(
                         latestPlant.copy(
                             identifiedSpecies = result.identifiedSpecies.takeIf { it.isNotBlank() } ?: latestPlant.identifiedSpecies,
-                            aiWateringIntervalDays = result.recommendedWateringIntervalDays ?: latestPlant.aiWateringIntervalDays
+                            aiWateringIntervalDays = result.recommendedWateringIntervalDays ?: latestPlant.aiWateringIntervalDays,
+                            // Reclassifica automaticamente pelo que a IA reconheceu na foto (ex.: orquídea,
+                            // suculenta, folhagem tropical), já que o usuário pode não saber o tipo exato ao cadastrar.
+                            category = result.suggestedCategory ?: latestPlant.category
                         )
                     )
                 }
