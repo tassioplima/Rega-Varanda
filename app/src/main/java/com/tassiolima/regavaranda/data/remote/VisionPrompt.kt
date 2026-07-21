@@ -13,14 +13,16 @@ object VisionPrompt {
      * A IA ainda deve confiar na própria identificação visual para espécies fora desta lista.
      */
     private val SPECIES_GUIDE = """
-        Guia de referência de espécies comuns por tipo de cuidado (use como apoio; confie na sua
-        própria identificação visual se a planta na foto não estiver nesta lista):
-        - ${PlantCategory.FOLHAGEM_TROPICAL.name} (${PlantCategory.FOLHAGEM_TROPICAL.label}): Monstera/Costela-de-adão, Jiboia/Pothos, Hera (Hedera helix), Filodendro, Samambaia, Zamioculca, Aglaonema, Calathea, Maranta, Singônio, Peperômia, Dracena, Palmeira-ráfis/Areca, Espada-de-são-jorge, Antúrio (folhagem), Costela-de-Adão
-        - ${PlantCategory.CACTO_SUCULENTA.name} (${PlantCategory.CACTO_SUCULENTA.label}): Echeveria, Suculenta-jade/Planta-do-dinheiro (Crassula), Aloe vera/Babosa, Haworthia, Sedum, Cordão-de-pérolas, Cordão-de-rainha, Cacto-mandacaru, Cacto-de-natal (Schlumbergera), Coroa-de-cristo, Agave, Cacto-bola
+        Guia de referência de espécies comuns por tipo de cuidado, incluindo nomes populares
+        usados no Brasil e em Portugal/resto da Europa (use como apoio; identifique a planta pela
+        aparência visual e conhecimento botânico geral, não só pelo nome — funciona para qualquer
+        espécie do mundo, mesmo fora desta lista ou com nome regional diferente):
+        - ${PlantCategory.FOLHAGEM_TROPICAL.name} (${PlantCategory.FOLHAGEM_TROPICAL.label}): Monstera/Costela-de-adão, Jiboia/Pothos/Hera-do-diabo, Hera/Hera-inglesa (Hedera helix), Filodendro, Samambaia/Feto, Zamioculca, Aglaonema, Calathea, Maranta, Singônio, Peperômia, Dracena/Pau-d'água, Palmeira-ráfis/Areca, Espada-de-são-jorge/Rabo-de-tigre (Sansevieria), Antúrio (folhagem), Ficus/Figueira-de-borracha, Planta-aranha/Clorofito
+        - ${PlantCategory.CACTO_SUCULENTA.name} (${PlantCategory.CACTO_SUCULENTA.label}): Echeveria, Suculenta-jade/Planta-do-dinheiro/Árvore-da-felicidade (Crassula), Aloe vera/Babosa, Haworthia, Sedum, Cordão-de-pérolas, Cordão-de-rainha, Cacto-mandacaru, Cacto-de-natal (Schlumbergera), Coroa-de-cristo, Agave, Cacto-bola, Ecévéria, Sempre-viva (Sempervivum)
         - ${PlantCategory.ORQUIDEA.name} (${PlantCategory.ORQUIDEA.label}): Orquídea-borboleta (Phalaenopsis), Cattleya, Dendrobium, Oncídio, Vanda
-        - ${PlantCategory.FLOR_ORNAMENTAL.name} (${PlantCategory.FLOR_ORNAMENTAL.label}): Rosa/Roseira, Begônia, Petúnia, Gerânio, Hibisco, Copo-de-leite, Violeta-africana, Azaleia, Bromélia (flor), Crisântemo, Lírio, Bem-me-quer/Margarida
-        - ${PlantCategory.HERVA_TEMPERO.name} (${PlantCategory.HERVA_TEMPERO.label}): Manjericão, Hortelã, Alecrim, Salsa, Cebolinha, Orégano, Tomilho, Sálvia, Coentro
-        - ${PlantCategory.HORTALICA_LEGUME.name} (${PlantCategory.HORTALICA_LEGUME.label}): Tomate-cereja, Pimentão, Pimenta, Alface, Rúcula, Pepino, Morango, Abobrinha, Berinjela
+        - ${PlantCategory.FLOR_ORNAMENTAL.name} (${PlantCategory.FLOR_ORNAMENTAL.label}): Rosa/Roseira, Begônia, Petúnia, Gerânio/Malva (Pelargonium, comum em varandas portuguesas), Hibisco, Copo-de-leite, Violeta-africana, Azaleia, Bromélia (flor), Crisântemo, Lírio, Bem-me-quer/Margarida, Lavanda, Hortênsia
+        - ${PlantCategory.HERVA_TEMPERO.name} (${PlantCategory.HERVA_TEMPERO.label}): Manjericão/Basilicão, Hortelã, Alecrim, Salsa/Salsinha, Cebolinho, Orégano, Tomilho, Sálvia, Coentro, Louro
+        - ${PlantCategory.HORTALICA_LEGUME.name} (${PlantCategory.HORTALICA_LEGUME.label}): Tomate-cereja, Pimentão/Pimento, Pimenta/Piripíri, Alface, Rúcula, Pepino, Morango, Abobrinha/Curgete, Berinjela/Beringela
     """.trimIndent()
 
     fun build(plantName: String, category: PlantCategory, userNotes: String, historySummary: String): String {
@@ -40,10 +42,12 @@ object VisionPrompt {
         val categoryOptions = PlantCategory.entries.joinToString(", ") { "\"${it.name}\" (${it.label})" }
 
         return """
-            Você é um especialista em botânica e jardinagem de varanda/apartamento.
-            Analise esta foto de uma planta que o dono chama de "$plantName" (categoria informada pelo
-            dono: ${category.label}). Identifique a espécie/tipo real da planta pela aparência na foto,
-            mesmo que o nome dado pelo dono não seja o nome científico ou popular correto.
+            Você é um especialista em botânica e jardinagem de varanda/apartamento, com conhecimento
+            de espécies do mundo todo (não só do Brasil — também comuns em Portugal e no resto da
+            Europa). Analise esta foto de uma planta que o dono chama de "$plantName" (categoria
+            informada pelo dono: ${category.label}). Identifique a espécie/tipo real da planta pela
+            aparência visual na foto, mesmo que o nome dado pelo dono seja um nome regional, não seja
+            o nome científico, ou não conste em nenhuma lista de referência.
             $notesLine
 
             $historyBlock
