@@ -7,6 +7,22 @@ import org.json.JSONObject
 /** Prompt e parsing do JSON de resposta, compartilhados entre provedores de IA (Anthropic, Gemini, ...). */
 object VisionPrompt {
 
+    /**
+     * Exemplos comuns de espécie -> categoria de cuidado, para orientar a classificação
+     * automática (ex.: Monstera e Hera são folhagem tropical, não "outra planta" genérica).
+     * A IA ainda deve confiar na própria identificação visual para espécies fora desta lista.
+     */
+    private val SPECIES_GUIDE = """
+        Guia de referência de espécies comuns por tipo de cuidado (use como apoio; confie na sua
+        própria identificação visual se a planta na foto não estiver nesta lista):
+        - ${PlantCategory.FOLHAGEM_TROPICAL.name} (${PlantCategory.FOLHAGEM_TROPICAL.label}): Monstera/Costela-de-adão, Jiboia/Pothos, Hera (Hedera helix), Filodendro, Samambaia, Zamioculca, Aglaonema, Calathea, Maranta, Singônio, Peperômia, Dracena, Palmeira-ráfis/Areca, Espada-de-são-jorge, Antúrio (folhagem), Costela-de-Adão
+        - ${PlantCategory.CACTO_SUCULENTA.name} (${PlantCategory.CACTO_SUCULENTA.label}): Echeveria, Suculenta-jade/Planta-do-dinheiro (Crassula), Aloe vera/Babosa, Haworthia, Sedum, Cordão-de-pérolas, Cordão-de-rainha, Cacto-mandacaru, Cacto-de-natal (Schlumbergera), Coroa-de-cristo, Agave, Cacto-bola
+        - ${PlantCategory.ORQUIDEA.name} (${PlantCategory.ORQUIDEA.label}): Orquídea-borboleta (Phalaenopsis), Cattleya, Dendrobium, Oncídio, Vanda
+        - ${PlantCategory.FLOR_ORNAMENTAL.name} (${PlantCategory.FLOR_ORNAMENTAL.label}): Rosa/Roseira, Begônia, Petúnia, Gerânio, Hibisco, Copo-de-leite, Violeta-africana, Azaleia, Bromélia (flor), Crisântemo, Lírio, Bem-me-quer/Margarida
+        - ${PlantCategory.HERVA_TEMPERO.name} (${PlantCategory.HERVA_TEMPERO.label}): Manjericão, Hortelã, Alecrim, Salsa, Cebolinha, Orégano, Tomilho, Sálvia, Coentro
+        - ${PlantCategory.HORTALICA_LEGUME.name} (${PlantCategory.HORTALICA_LEGUME.label}): Tomate-cereja, Pimentão, Pimenta, Alface, Rúcula, Pepino, Morango, Abobrinha, Berinjela
+    """.trimIndent()
+
     fun build(plantName: String, category: PlantCategory, userNotes: String, historySummary: String): String {
         val notesLine = if (userNotes.isNotBlank()) "Observações do dono sobre esta planta: $userNotes" else ""
         val historyBlock = if (historySummary.isNotBlank()) {
@@ -31,6 +47,8 @@ object VisionPrompt {
             $notesLine
 
             $historyBlock
+
+            $SPECIES_GUIDE
 
             Responda EXCLUSIVAMENTE com um JSON válido (sem markdown, sem texto antes ou depois),
             exatamente neste formato:

@@ -1,6 +1,7 @@
 package com.tassiolima.regavaranda.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.navigation.NavType
@@ -32,8 +33,19 @@ private object Routes {
 private const val PICKED_ORIENTATION_KEY = "picked_orientation"
 
 @Composable
-fun RegaVarandaNavGraph() {
+fun RegaVarandaNavGraph(
+    pendingPlantId: Long? = null,
+    onPendingPlantIdConsumed: () -> Unit = {}
+) {
     val navController = rememberNavController()
+
+    // Deep link vindo de uma notificação: navega direto para a planta assim que o grafo existe.
+    LaunchedEffect(pendingPlantId) {
+        pendingPlantId?.let { id ->
+            navController.navigate(Routes.plantDetail(id))
+            onPendingPlantIdConsumed()
+        }
+    }
 
     NavHost(
         navController = navController,

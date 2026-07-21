@@ -1,6 +1,7 @@
 package com.tassiolima.regavaranda.notifications
 
 import android.content.Context
+import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -13,10 +14,21 @@ import java.time.temporal.TemporalAdjusters
 
 object ReminderScheduler {
 
+    /**
+     * Regar de manhã é melhor do que à tarde/sol forte do meio-dia: a água tem tempo de ser
+     * absorvida antes do calor, e evita queimar folhas com gotas sob sol direto. Por isso a
+     * checagem principal (que avisa qualquer planta que precise de rega) roda de manhã; a
+     * checagem da noite só reforça plantas com rega 2x/dia que ainda faltam regar de novo hoje
+     * — não repete o aviso de plantas de 1x/dia que já deveriam ter sido regadas de manhã.
+     */
     fun schedule(context: Context) {
         NotificationHelper.ensureChannel(context)
-        scheduleDailyCheck(context, uniqueName = "watering_check_morning", hour = 8)
-        scheduleDailyCheck(context, uniqueName = "watering_check_afternoon", hour = 17)
+        // Substituído pela checagem "watering_check_evening" abaixo — cancela para quem
+        // instalou uma versão anterior e ainda tem esse worker antigo agendado (KEEP não
+        // o tocaria sozinho, então ficaria rodando para sempre em paralelo ao novo).
+        WorkManager.getInstance(context).cancelUniqueWork("watering_check_afternoon")
+        scheduleDailyCheck(context, uniqueName = "watering_check_morning", hour = 7, onlyDoubleWatering = false)
+        scheduleDailyCheck(context, uniqueName = "watering_check_evening", hour = 18, onlyDoubleWatering = true)
 
         NotificationHelper.ensureWeeklyChannel(context)
         scheduleWeeklySummary(context)
@@ -45,10 +57,11 @@ object ReminderScheduler {
         return Duration.between(now, target)
     }
 
-    private fun scheduleDailyCheck(context: Context, uniqueName: String, hour: Int) {
+    private fun scheduleDailyCheck(context: Context, uniqueName: String, hour: Int, onlyDoubleWatering: Boolean) {
         val initialDelay = delayUntilNext(hour)
         val request = PeriodicWorkRequestBuilder<WateringReminderWorker>(Duration.ofHours(24))
             .setInitialDelay(initialDelay)
+            .setInputData(Data.Builder().putBoolean(WateringReminderWorker.KEY_ONLY_DOUBLE_WATERING, onlyDoubleWatering).build())
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(

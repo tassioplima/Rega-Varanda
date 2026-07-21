@@ -30,13 +30,14 @@ class WateringReminderWorker(
             val now = System.currentTimeMillis()
 
             val plans = PlantPlanner.buildPlans(plants, weather, settings, wateringLog, now)
-            val due = plans.filter { it.status.isDueNow }
+            val onlyDoubleWatering = inputData.getBoolean(KEY_ONLY_DOUBLE_WATERING, false)
+            val due = plans.filter { it.status.isDueNow && (!onlyDoubleWatering || it.plan.timesPerDay >= 2) }
 
-            val doubleWateringNames = due.filter { it.plan.timesPerDay >= 2 }.map { it.plant.name }
-            val normalNames = due.filter { it.plan.timesPerDay < 2 }.map { it.plant.name }
+            val doubleWateringPlants = due.filter { it.plan.timesPerDay >= 2 }.map { it.plant.id to it.plant.name }
+            val normalPlants = due.filter { it.plan.timesPerDay < 2 }.map { it.plant.id to it.plant.name }
 
             if (due.isNotEmpty()) {
-                NotificationHelper.showWateringDue(applicationContext, normalNames, doubleWateringNames)
+                NotificationHelper.showWateringDue(applicationContext, normalPlants, doubleWateringPlants)
             }
             Result.success()
         } catch (e: CancellationException) {
@@ -44,5 +45,9 @@ class WateringReminderWorker(
         } catch (e: Exception) {
             Result.retry()
         }
+    }
+
+    companion object {
+        const val KEY_ONLY_DOUBLE_WATERING = "only_double_watering"
     }
 }
