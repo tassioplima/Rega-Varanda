@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Save
@@ -72,6 +73,10 @@ fun VarandaSettingsScreen(
     val isImporting by viewModel.isImporting.collectAsState()
     val importResult by viewModel.importResult.collectAsState()
     val importError by viewModel.importError.collectAsState()
+    val isReclassifying by viewModel.isReclassifying.collectAsState()
+    val reclassifyProgress by viewModel.reclassifyProgress.collectAsState()
+    val reclassifyResult by viewModel.reclassifyResult.collectAsState()
+    val reclassifyError by viewModel.reclassifyError.collectAsState()
     val context = LocalContext.current
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -213,6 +218,44 @@ fun VarandaSettingsScreen(
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            item {
+                Text(
+                    "Já tem plantas cadastradas antes desta função existir? Reclassifique todas de " +
+                        "uma vez (suculenta, orquídea, folhagem tropical...) reaproveitando a última " +
+                        "foto já analisada de cada uma — sem precisar tirar foto de novo.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            item {
+                OutlinedButton(
+                    onClick = viewModel::reclassifyExistingPlants,
+                    enabled = !isReclassifying,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isReclassifying) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    } else {
+                        Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                    }
+                    val progressLabel = reclassifyProgress?.let { (done, total) -> " Reclassificando $done/$total..." }
+                    Text(progressLabel ?: " Reclassificar plantas cadastradas")
+                }
+            }
+            reclassifyResult?.let { count ->
+                item {
+                    Text(
+                        if (count > 0) "✅ $count planta(s) reclassificada(s)." else "Nenhuma planta com foto analisada para reclassificar.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            reclassifyError?.let { error ->
+                item {
+                    Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
             }
 
             item {

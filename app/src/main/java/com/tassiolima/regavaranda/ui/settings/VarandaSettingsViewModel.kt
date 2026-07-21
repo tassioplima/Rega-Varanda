@@ -9,6 +9,7 @@ import com.tassiolima.regavaranda.data.model.Orientation
 import com.tassiolima.regavaranda.di.ServiceLocator
 import com.tassiolima.regavaranda.util.BackupManager
 import com.tassiolima.regavaranda.util.ImportSummary
+import com.tassiolima.regavaranda.util.PhotoAnalyzer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ class VarandaSettingsViewModel(application: Application) : AndroidViewModel(appl
 
     private val settingsRepo = ServiceLocator.settingsRepository(application)
     private val apiKeyRepo = ServiceLocator.apiKeyRepository(application)
+    private val photoAnalyzer = PhotoAnalyzer(application)
 
     val settings: StateFlow<com.tassiolima.regavaranda.data.repository.VarandaSettings?> =
         settingsRepo.settingsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -73,6 +75,47 @@ class VarandaSettingsViewModel(application: Application) : AndroidViewModel(appl
     fun onImportResultShown() {
         _importResult.value = null
         _importError.value = null
+    }
+
+    private val _isReclassifying = MutableStateFlow(false)
+    val isReclassifying: StateFlow<Boolean> = _isReclassifying.asStateFlow()
+
+    private val _reclassifyProgress = MutableStateFlow<Pair<Int, Int>?>(null)
+    val reclassifyProgress: StateFlow<Pair<Int, Int>?> = _reclassifyProgress.asStateFlow()
+
+    private val _reclassifyResult = MutableStateFlow<Int?>(null)
+    val reclassifyResult: StateFlow<Int?> = _reclassifyResult.asStateFlow()
+
+    private val _reclassifyError = MutableStateFlow<String?>(null)
+    val reclassifyError: StateFlow<String?> = _reclassifyError.asStateFlow()
+
+    /**
+     * Reprocessa a foto mais recente de cada planta já cadastrada, para aplicar retroativamente
+     * a categoria automática (e refrescar dicas/espécie) sem o usuário precisar reanalisar
+     * planta por planta.
+     */
+    fun reclassifyExistingPlants() {
+        if (apiKeyRepo.getKey(apiKeyRepo.getSelectedProvider()).isNullOrBlank()) {
+            _reclassifyError.value = "Configure sua chave de IA acima antes de reclassificar."
+            return
+        }
+        viewModelScope.launch {
+            _isReclassifying.value = true
+            _reclassifyError.value = null
+            _reclassifyResult.value = null
+            runCatching {
+                photoAnalyzer.reanalyzeExistingPlants { done, total -> _reclassifyProgress.value = done to total }
+            }
+                .onSuccess { _reclassifyResult.value = it }
+                .onFailure { _reclassifyError.value = it.message ?: "Falha ao reclassificar plantas" }
+            _reclassifyProgress.value = null
+            _isReclassifying.value = false
+        }
+    }
+
+    fun onReclassifyResultShown() {
+        _reclassifyResult.value = null
+        _reclassifyError.value = null
     }
 
     fun setOrientation(orientation: Orientation) {
