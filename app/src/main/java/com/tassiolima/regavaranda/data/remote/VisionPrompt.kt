@@ -23,6 +23,7 @@ object VisionPrompt {
         - ${PlantCategory.FLOR_ORNAMENTAL.name} (${PlantCategory.FLOR_ORNAMENTAL.label}): Rosa/Roseira, Begônia, Petúnia, Gerânio/Malva (Pelargonium, comum em varandas portuguesas), Hibisco, Copo-de-leite, Violeta-africana, Azaleia, Bromélia (flor), Crisântemo, Lírio, Bem-me-quer/Margarida, Lavanda, Hortênsia
         - ${PlantCategory.HERVA_TEMPERO.name} (${PlantCategory.HERVA_TEMPERO.label}): Manjericão/Basilicão, Hortelã, Alecrim, Salsa/Salsinha, Cebolinho, Orégano, Tomilho, Sálvia, Coentro, Louro
         - ${PlantCategory.HORTALICA_LEGUME.name} (${PlantCategory.HORTALICA_LEGUME.label}): Tomate-cereja, Pimentão/Pimento, Pimenta/Piripíri, Alface, Rúcula, Pepino, Morango, Abobrinha/Curgete, Berinjela/Beringela
+        - ${PlantCategory.BONSAI.name} (${PlantCategory.BONSAI.label}): qualquer árvore cultivada com a técnica de bonsai (tronco lenhoso miniaturizado, geralmente em vaso raso/prato), independente da espécie — ex.: Bonsai de Ficus, Olmo-chinês (Ulmus parvifolia), Jaboticaba, Jade/Portulacária, Junípero/Zimbro, Buxinho, Pata-de-elefante
     """.trimIndent()
 
     fun build(plantName: String, category: PlantCategory, userNotes: String, historySummary: String): String {
@@ -44,10 +45,12 @@ object VisionPrompt {
         return """
             Você é um especialista em botânica e jardinagem de varanda/apartamento, com conhecimento
             de espécies do mundo todo (não só do Brasil — também comuns em Portugal e no resto da
-            Europa). Analise esta foto de uma planta que o dono chama de "$plantName" (categoria
-            informada pelo dono: ${category.label}). Identifique a espécie/tipo real da planta pela
-            aparência visual na foto, mesmo que o nome dado pelo dono seja um nome regional, não seja
-            o nome científico, ou não conste em nenhuma lista de referência.
+            Europa). Analise esta foto de uma planta que o dono chama de "$plantName". A categoria
+            atualmente registrada para ela é "${category.label}", mas isso pode estar errado ou
+            genérico demais (foi definida manualmente pelo dono sem certeza, ou por uma classificação
+            automática anterior) — NÃO assuma que já está correta. Identifique a espécie/tipo real da
+            planta pela aparência visual na foto, mesmo que o nome dado pelo dono seja um nome
+            regional, não seja o nome científico, ou não conste em nenhuma lista de referência.
             $notesLine
 
             $historyBlock
@@ -58,7 +61,7 @@ object VisionPrompt {
             exatamente neste formato:
             {
               "identified_species": "nome popular (e científico entre parênteses se souber) da espécie identificada na foto, ex: 'Suculenta Echeveria (Echeveria elegans)'",
-              "suggested_category": uma destas opções, a que melhor combina com o que você vê na foto: $categoryOptions,
+              "suggested_category": reavalie de forma independente pela aparência da foto — não copie a categoria atualmente registrada só porque já está definida, escolha a que realmente combina com o que você vê, dentre estas opções: $categoryOptions,
               "recommended_watering_interval_days": número inteiro de dias entre regas ideal para ESSA espécie específica em condições normais (ex: 1, 3, 7, 15, 30 — use o valor típico e conhecido para a espécie identificada, não um chute genérico),
               "health_state": "SAUDAVEL" ou "ATENCAO" ou "CRITICA",
               "diagnosis": "resumo curto (1-2 frases) do que você observa na foto",

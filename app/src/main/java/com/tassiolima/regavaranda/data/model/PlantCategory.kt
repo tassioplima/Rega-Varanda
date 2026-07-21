@@ -70,6 +70,15 @@ enum class PlantCategory(
         careTip = "Regue por imersão do vaso em água à temperatura ambiente por alguns minutos (ou com o método do cubo de gelo), evitando molhar a coroa. Prefira substrato de casca/fibra em vez de terra comum, com luz indireta forte.",
         dryMoistureThreshold = 3
     ),
+    BONSAI(
+        label = "Bonsai",
+        emoji = "🌳",
+        baseWateringDays = 2,
+        fertilizingDays = 30,
+        sunNeed = SunNeed.MEIA_SOMBRA,
+        careTip = "O vaso raso seca rápido — verifique o substrato diariamente e regue assim que a superfície começar a secar, sem deixar secar por completo. Poda de formação e fio de arame devem seguir a época certa da espécie da árvore.",
+        dryMoistureThreshold = 4
+    ),
     OUTRA(
         label = "Outra planta",
         emoji = "🌱",
