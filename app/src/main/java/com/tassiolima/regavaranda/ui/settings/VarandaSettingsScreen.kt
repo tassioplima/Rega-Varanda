@@ -15,8 +15,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BatteryAlert
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -33,6 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,13 +46,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tassiolima.regavaranda.data.model.AiProvider
 import com.tassiolima.regavaranda.data.model.Orientation
 import com.tassiolima.regavaranda.ui.components.OrientationOption
+import com.tassiolima.regavaranda.util.BackgroundReliabilityHelper
 import com.tassiolima.regavaranda.util.ImageUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +86,20 @@ fun VarandaSettingsScreen(
     val reclassifyResult by viewModel.reclassifyResult.collectAsState()
     val reclassifyError by viewModel.reclassifyError.collectAsState()
     val context = LocalContext.current
+
+    // Reavalia ao voltar da tela de configurações do sistema (o usuário pode ter concedido
+    // a isenção de bateria lá e voltado para o app).
+    var batteryExempt by remember { mutableStateOf(BackgroundReliabilityHelper.isIgnoringBatteryOptimizations(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                batteryExempt = BackgroundReliabilityHelper.isIgnoringBatteryOptimizations(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { viewModel.importBackup(it) }
@@ -120,6 +142,57 @@ fun VarandaSettingsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item {
+                Text("Notificações em segundo plano", style = MaterialTheme.typography.titleMedium)
+            }
+            if (batteryExempt) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text(
+                            "Sem restrição de bateria — os lembretes de rega devem chegar mesmo com o app fechado.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            } else {
+                item {
+                    Text(
+                        "Sem isso, o Android (e a MIUI, se este for um Xiaomi) pode encerrar o app antes do " +
+                            "lembrete de rega conseguir disparar sozinho — as notificações só chegam quando " +
+                            "você abre o app manualmente.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                item {
+                    OutlinedButton(
+                        onClick = { BackgroundReliabilityHelper.requestIgnoreBatteryOptimizations(context) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.BatteryAlert, contentDescription = null)
+                        Text(" Permitir em segundo plano")
+                    }
+                }
+                if (BackgroundReliabilityHelper.isXiaomi()) {
+                    item {
+                        Text(
+                            "Detectamos um aparelho Xiaomi: a MIUI tem uma restrição própria além da do " +
+                                "Android — ative também o \"Início automático\" para o Rega Varanda.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    item {
+                        OutlinedButton(
+                            onClick = { BackgroundReliabilityHelper.openXiaomiAutoStartSettings(context) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Filled.RocketLaunch, contentDescription = null)
+                            Text(" Abrir configuração de Início automático")
+                        }
+                    }
+                }
+            }
+
             item {
                 Text(
                     "Para qual direção sua varanda / a frente da casa está voltada?",
